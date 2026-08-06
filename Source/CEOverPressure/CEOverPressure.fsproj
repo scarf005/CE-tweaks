@@ -15,6 +15,7 @@
     <Compile Include="Utils.fs" />
     <Compile Include="Defs.fs" />
     <Compile Include="ModSettings.fs" />
+    <Compile Include="DamageWorkers.fs" />
     <Compile Include="Overpressure.fs" />
   </ItemGroup>
 

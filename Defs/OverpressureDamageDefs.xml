@@ -60,7 +60,7 @@
   <DamageDef ParentName="BluntBase">
     <defName>CEOP_Overpressure</defName>
     <label>overpressure</label>
-    <workerClass>DamageWorker_AddInjury</workerClass>
+    <workerClass>CEOverPressure.DamageWorker_BlastPropagation</workerClass>
     <deathMessage>{0} has been killed by an overpressure blast wave.</deathMessage>
     <hediff>CEOP_Barotrauma</hediff>
     <hediffSkin>CEOP_BarotraumaSkin</hediffSkin>
