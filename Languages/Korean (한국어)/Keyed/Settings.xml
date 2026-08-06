@@ -6,7 +6,7 @@
   <CE_Tweaks_EnableAutocannonExplosions_Label>기관포 폭발 활성화</CE_Tweaks_EnableAutocannonExplosions_Label>
   <CE_Tweaks_EnableAutocannonExplosions_Tooltip>선택된 기관포 AP-HE 발사체에 추가된 폭발 효과를 활성화합니다.</CE_Tweaks_EnableAutocannonExplosions_Tooltip>
   <CE_Tweaks_EnableBlastPropagation_Label>폭발 피해 전파 활성화</CE_Tweaks_EnableBlastPropagation_Label>
-  <CE_Tweaks_EnableBlastPropagation_Tooltip>신체 부위가 파괴되면 남은 폭발 피해를 연결된 상위 부위로 전달합니다.</CE_Tweaks_EnableBlastPropagation_Tooltip>
+  <CE_Tweaks_EnableBlastPropagation_Tooltip>신체 부위가 파괴되면 남은 폭발 또는 폭압 피해를 연결된 상위 부위로 전달합니다.</CE_Tweaks_EnableBlastPropagation_Tooltip>
   <CE_Tweaks_EnableLogging_Label>디버그 기록 활성화</CE_Tweaks_EnableLogging_Label>
   <CE_Tweaks_EnableLogging_Tooltip>폭압 이벤트를 콘솔에 기록합니다.</CE_Tweaks_EnableLogging_Tooltip>
 </LanguageData>

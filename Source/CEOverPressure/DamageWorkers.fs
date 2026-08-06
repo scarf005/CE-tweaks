@@ -1,5 +1,6 @@
 namespace CEOverPressure
 
+open System.Collections.Generic
 open System.Threading
 open HarmonyLib
 open Verse
@@ -7,7 +8,16 @@ open Verse
 module internal ExplosionDamagePropagation =
     let propagating = new ThreadLocal<bool>()
 
+    let overpressureDamageDefs =
+        lazy
+            (HashSet<DamageDef>(
+                DefDatabase<OverpressureSettingsDef>.AllDefsListForReading
+                |> Seq.choose (fun settings -> if isNull settings.injuryDamageDef then None else Some settings.injuryDamageDef)
+            ))
+
     let enabled () = LoadedModManager.GetMod<CEOverPressureMod>().GetSettings<CEOverPressureSettings>().EnableBlastPropagation
+
+    let affects (damageDef: DamageDef) = damageDef.isExplosive || overpressureDamageDefs.Value.Contains(damageDef)
 
     let merge (target: DamageWorker.DamageResult) (source: DamageWorker.DamageResult) (pawn: Pawn) =
         target.wounded <- target.wounded || source.wounded
@@ -48,7 +58,7 @@ module internal ExplosionDamagePropagationPatch =
             not ExplosionDamagePropagation.propagating.Value
             && ExplosionDamagePropagation.enabled ()
             && not (isNull dinfo.Def)
-            && dinfo.Def.isExplosive
+            && ExplosionDamagePropagation.affects dinfo.Def
             && not (__instance :? DamageWorker_Blunt)
             && not (isNull hitPart)
             && not (dinfo.Def.harmAllLayersUntilOutside && hitPart.depth = BodyPartDepth.Inside)
