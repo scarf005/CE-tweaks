@@ -6,7 +6,7 @@
   <CE_Tweaks_EnableAutocannonExplosions_Label>Enable autocannon explosions</CE_Tweaks_EnableAutocannonExplosions_Label>
   <CE_Tweaks_EnableAutocannonExplosions_Tooltip>Enable blast effects added to selected autocannon AP-HE projectiles.</CE_Tweaks_EnableAutocannonExplosions_Tooltip>
   <CE_Tweaks_EnableBlastPropagation_Label>Enable blast propagation</CE_Tweaks_EnableBlastPropagation_Label>
-  <CE_Tweaks_EnableBlastPropagation_Tooltip>Carry excess overpressure damage to the connected parent part when a body part is destroyed.</CE_Tweaks_EnableBlastPropagation_Tooltip>
+  <CE_Tweaks_EnableBlastPropagation_Tooltip>Carry excess explosion damage to the connected parent part when a body part is destroyed.</CE_Tweaks_EnableBlastPropagation_Tooltip>
   <CE_Tweaks_EnableLogging_Label>Enable debug logging</CE_Tweaks_EnableLogging_Label>
   <CE_Tweaks_EnableLogging_Tooltip>Log overpressure events to the console.</CE_Tweaks_EnableLogging_Tooltip>
 </LanguageData>

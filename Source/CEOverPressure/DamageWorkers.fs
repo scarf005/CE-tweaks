@@ -1,27 +1,73 @@
 namespace CEOverPressure
 
+open System.Threading
+open HarmonyLib
 open Verse
 
-type DamageWorker_BlastPropagation() =
-    inherit DamageWorker_AddInjury()
+module internal ExplosionDamagePropagation =
+    let propagating = new ThreadLocal<bool>()
 
-    override this.ApplySpecialEffectsToPart(pawn, totalDamage, dinfo, result) =
-        let settings = LoadedModManager.GetMod<CEOverPressureMod>().GetSettings<CEOverPressureSettings>()
+    let enabled () = LoadedModManager.GetMod<CEOverPressureMod>().GetSettings<CEOverPressureSettings>().EnableBlastPropagation
 
-        if not settings.EnableBlastPropagation then
-            base.ApplySpecialEffectsToPart(pawn, totalDamage, dinfo, result)
-        else
-            let mutable remainingDamage = totalDamage
-            let mutable currentDamageInfo = dinfo
-            let mutable applyDamage = true
+    let merge (target: DamageWorker.DamageResult) (source: DamageWorker.DamageResult) (pawn: Pawn) =
+        target.wounded <- target.wounded || source.wounded
+        target.headshot <- target.headshot || source.headshot
+        target.deflected <- target.deflected || source.deflected
+        target.stunned <- target.stunned || source.stunned
+        target.deflectedByMetalArmor <- target.deflectedByMetalArmor || source.deflectedByMetalArmor
+        target.diminished <- target.diminished || source.diminished
+        target.diminishedByMetalArmor <- target.diminishedByMetalArmor || source.diminishedByMetalArmor
+        target.totalDamageDealt <- target.totalDamageDealt + source.totalDamageDealt
 
-            while applyDamage && not pawn.Dead do
-                let damageDealt = base.FinalizeAndAddInjury(pawn, remainingDamage, currentDamageInfo, result)
-                remainingDamage <- remainingDamage - damageDealt
+        if not (isNull source.parts) then
+            for part in source.parts do
+                target.AddPart(pawn, part)
 
-                let hitPart = currentDamageInfo.HitPart
+        if not (isNull source.hediffs) then
+            for hediff in source.hediffs do
+                target.AddHediff(hediff)
 
-                if remainingDamage <= 1.0f || isNull hitPart || not (pawn.health.hediffSet.PartIsMissing(hitPart)) || isNull hitPart.parent then
-                    applyDamage <- false
-                else
-                    currentDamageInfo.SetHitPart(hitPart.parent)
+[<HarmonyPatch(typeof<DamageWorker_AddInjury>,
+               "FinalizeAndAddInjury",
+               [| typeof<Pawn>
+                  typeof<float32>
+                  typeof<DamageInfo>
+                  typeof<DamageWorker.DamageResult> |])>]
+module internal ExplosionDamagePropagationPatch =
+    let Postfix
+        (__instance: DamageWorker_AddInjury)
+        (pawn: Pawn)
+        (totalDamage: float32)
+        (dinfo: DamageInfo)
+        (result: DamageWorker.DamageResult)
+        (__result: float32)
+        =
+        let hitPart = dinfo.HitPart
+
+        if
+            not ExplosionDamagePropagation.propagating.Value
+            && ExplosionDamagePropagation.enabled ()
+            && not (isNull dinfo.Def)
+            && dinfo.Def.isExplosive
+            && not (__instance :? DamageWorker_Blunt)
+            && not (isNull hitPart)
+            && not (dinfo.Def.harmAllLayersUntilOutside && hitPart.depth = BodyPartDepth.Inside)
+            && pawn.health.hediffSet.PartIsMissing(hitPart)
+        then
+            let mutable remainingDamage = totalDamage - __result
+            let mutable currentPart = hitPart
+            ExplosionDamagePropagation.propagating.Value <- true
+
+            try
+                while remainingDamage > 1.0f && not pawn.Dead && not (isNull currentPart.parent) do
+                    let mutable propagatedDamage = DamageInfo(dinfo)
+                    currentPart <- currentPart.parent
+                    propagatedDamage.SetHitPart(currentPart)
+                    propagatedDamage.SetAllowDamagePropagation(false)
+                    propagatedDamage.SetIgnoreArmor(true)
+
+                    let propagatedResult = pawn.TakeDamage(propagatedDamage)
+                    ExplosionDamagePropagation.merge result propagatedResult pawn
+                    remainingDamage <- remainingDamage - propagatedResult.totalDamageDealt
+            finally
+                ExplosionDamagePropagation.propagating.Value <- false
