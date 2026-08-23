@@ -6,8 +6,9 @@ Optional gameplay tweaks for [Combat Extended](https://github.com/CombatExtended
 
 - blast overpressure adds wall-aware, enclosed-space pressure effects, stuns, and internal injuries
 - realistic autocannon explosions add impact-triggered blast effects to selected AP-HE ammunition
+- idle colonists automatically reload their weapons after higher-priority work
 
-Both features are disabled by default and can be enabled independently in Mod Settings
+The explosion features are disabled by default and can be enabled independently in Mod Settings. Idle weapon reloading is enabled by default and can be disabled there.
 
 ## Configuration
 

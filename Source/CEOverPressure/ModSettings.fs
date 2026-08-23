@@ -10,6 +10,7 @@ type CEOverPressureSettings() =
     let mutable enableOverpressure = false
     let mutable enableAutocannonExplosions = false
     let mutable enableBlastPropagation = true
+    let mutable enableIdleWeaponReloading = true
     let mutable enableLogging = false
 
     member this.EnableOverpressure
@@ -24,6 +25,10 @@ type CEOverPressureSettings() =
         with get () = enableBlastPropagation
         and set v = enableBlastPropagation <- v
 
+    member this.EnableIdleWeaponReloading
+        with get () = enableIdleWeaponReloading
+        and set v = enableIdleWeaponReloading <- v
+
     member this.EnableLogging
         with get () = enableLogging
         and set v = enableLogging <- v
@@ -32,6 +37,7 @@ type CEOverPressureSettings() =
         Scribe_Values.Look<bool>(&enableOverpressure, "enableOverpressure", false, false)
         Scribe_Values.Look<bool>(&enableAutocannonExplosions, "enableAutocannonExplosions", false, false)
         Scribe_Values.Look<bool>(&enableBlastPropagation, "enableBlastPropagation", true, false)
+        Scribe_Values.Look<bool>(&enableIdleWeaponReloading, "enableIdleWeaponReloading", true, false)
         Scribe_Values.Look<bool>(&enableLogging, "enableLogging", false, false)
 
 
@@ -50,6 +56,7 @@ type CEOverPressureMod(contents: ModContentPack) as this =
         let mutable overpressure = settings.EnableOverpressure
         let mutable autocannonExplosions = settings.EnableAutocannonExplosions
         let mutable blastPropagation = settings.EnableBlastPropagation
+        let mutable idleWeaponReloading = settings.EnableIdleWeaponReloading
         let mutable logging = settings.EnableLogging
 
         listing.CheckboxLabeled(
@@ -70,17 +77,25 @@ type CEOverPressureMod(contents: ModContentPack) as this =
             "CE_Tweaks_EnableBlastPropagation_Tooltip".Translate().ToString()
         )
 
+        listing.CheckboxLabeled(
+            "CE_Tweaks_EnableIdleWeaponReloading_Label".Translate().ToString(),
+            &idleWeaponReloading,
+            "CE_Tweaks_EnableIdleWeaponReloading_Tooltip".Translate().ToString()
+        )
+
         listing.CheckboxLabeled("CE_Tweaks_EnableLogging_Label".Translate().ToString(), &logging, "CE_Tweaks_EnableLogging_Tooltip".Translate().ToString())
 
         if
             overpressure <> settings.EnableOverpressure
             || autocannonExplosions <> settings.EnableAutocannonExplosions
             || blastPropagation <> settings.EnableBlastPropagation
+            || idleWeaponReloading <> settings.EnableIdleWeaponReloading
             || logging <> settings.EnableLogging
         then
             settings.EnableOverpressure <- overpressure
             settings.EnableAutocannonExplosions <- autocannonExplosions
             settings.EnableBlastPropagation <- blastPropagation
+            settings.EnableIdleWeaponReloading <- idleWeaponReloading
             settings.EnableLogging <- logging
             settings.Write()
 

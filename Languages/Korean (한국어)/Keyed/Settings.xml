@@ -7,6 +7,8 @@
   <CE_Tweaks_EnableAutocannonExplosions_Tooltip>선택된 기관포 AP-HE 발사체에 추가된 폭발 효과를 활성화합니다.</CE_Tweaks_EnableAutocannonExplosions_Tooltip>
   <CE_Tweaks_EnableBlastPropagation_Label>폭발 피해 전파 활성화</CE_Tweaks_EnableBlastPropagation_Label>
   <CE_Tweaks_EnableBlastPropagation_Tooltip>신체 부위가 파괴되면 남은 폭발 또는 폭압 피해를 연결된 상위 부위로 전달합니다.</CE_Tweaks_EnableBlastPropagation_Tooltip>
+  <CE_Tweaks_EnableIdleWeaponReloading_Label>유휴 폰 무기 재장전</CE_Tweaks_EnableIdleWeaponReloading_Label>
+  <CE_Tweaks_EnableIdleWeaponReloading_Tooltip>더 높은 우선순위의 작업이 없을 때만 비징집 폰의 무기를 자동으로 재장전합니다. 비활성화하면 자동 무기 재장전 작업을 수행하지 않습니다.</CE_Tweaks_EnableIdleWeaponReloading_Tooltip>
   <CE_Tweaks_EnableLogging_Label>디버그 기록 활성화</CE_Tweaks_EnableLogging_Label>
   <CE_Tweaks_EnableLogging_Tooltip>폭압 이벤트를 콘솔에 기록합니다.</CE_Tweaks_EnableLogging_Tooltip>
 </LanguageData>
