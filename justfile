@@ -9,10 +9,14 @@ test:
     mise exec dotnet@8.0.422 -- dotnet fsi Tests/PressureModelTests.fsx
     deno test --allow-read scripts
 
+# Benchmark prepared pressure evaluation against the previous per-pawn calculation
+bench:
+    DOTNET_TieredCompilation=0 mise exec dotnet@8.0.422 -- dotnet fsi --optimize+ Benchmarks/PressureModelBenchmarks.fsx
+
 # Format F# and Deno sources with their tracked configuration
 fmt:
     mise exec dotnet@8.0.422 -- dotnet tool restore
-    mise exec dotnet@8.0.422 -- dotnet tool run fantomas Source/CEOverPressure Tests
+    mise exec dotnet@8.0.422 -- dotnet tool run fantomas Source/CEOverPressure Tests Benchmarks
     deno fmt
 
 # Build the assembly and regenerate autocannon runtime patches

@@ -218,11 +218,10 @@ module internal Overpressure =
 
     let private applyToPawn
         (configuration: OverpressureSettingsDef)
-        parameters
+        pressureModel
         center
         (map: Map)
         scanRadius
-        yieldKg
         height
         pressureMultiplier
         (blastRoom: Room)
@@ -234,7 +233,7 @@ module internal Overpressure =
         =
         if not pawn.Dead && pawn.Spawned && pawn.Position.InHorDistOf(center, scanRadius) && GenSight.LineOfSight(center, pawn.Position, map, true) then
             let distanceCells = max configuration.minimumDistanceCells (pawn.Position.DistanceTo center)
-            let mutable peakKPa = PressureModel.peakPressureKPa parameters (distanceCells * parameters.MetresPerCell) yieldKg
+            let mutable peakKPa = PressureModel.peakPressureKPa pressureModel (distanceCells * configuration.metresPerCell)
 
             if height < configuration.groundReflectionMaximumHeight then
                 peakKPa <- peakKPa * configuration.groundReflectionMultiplier
@@ -278,7 +277,8 @@ module internal Overpressure =
                             | _ -> 1.0f
 
                         let pressureMultiplier = extensionMultiplier * (if isThermobaric damageDef then configuration.thermobaricPressureMultiplier else 1.0f)
-                        let scanRadius = max (radius + configuration.scanRadiusPadding) (PressureModel.pressureRangeCells parameters yieldKg)
+                        let pressureModel = PressureModel.prepare parameters yieldKg
+                        let scanRadius = max (radius + configuration.scanRadiusPadding) (PressureModel.pressureRangeCells pressureModel)
                         let blastRoom = RegionAndRoomQuery.RoomAt(center, map, RegionType.Set_Passable)
                         let enclosedMultiplier = roomMultiplier configuration blastRoom
 
@@ -318,11 +318,10 @@ module internal Overpressure =
                             for pawn in processedPawns do
                                 applyToPawn
                                     configuration
-                                    parameters
+                                    pressureModel
                                     center
                                     map
                                     scanRadius
-                                    yieldKg
                                     height
                                     pressureMultiplier
                                     blastRoom
