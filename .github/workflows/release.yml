@@ -6,16 +6,23 @@ on:
   workflow_dispatch:
 
 env:
-  RIMWORLD_VERSION: "1.6"
   MOD_PACKAGE_ID: "scarf.CombatExtended.tweaks"
   SOLUTION_FILE: Source/CEOverPressure/CEOverPressure.fsproj
-  ASSEMBLY_DIR: 1.6/Assemblies
+  RIMWORLD_DIR: ${{ github.workspace }}/RimWorld
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: check RimWorld 1.7 references
+        run: |
+          test -f "$RIMWORLD_DIR/UnityStubs.dll" || {
+            echo "::error::RimWorld 1.7 reference assemblies are not publicly available; build releases locally with 'just build'."
+            exit 1
+          }
 
       - name: download Combat Extended
         run: |
@@ -27,14 +34,21 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "10.0.x"
 
-      - run: dotnet build '${{ env.SOLUTION_FILE }}' -c Release
+      - name: build
+        run: |
+          dotnet build '${{ env.SOLUTION_FILE }}' -c Release
+          mkdir -p Source/obj/rimworld-1.6
+          git archive origin/rimworld-1.6 Source | tar -x -C Source/obj/rimworld-1.6
+          dotnet build "Source/obj/rimworld-1.6/$SOLUTION_FILE" -c Release -p:OutputPath="$PWD/1.6/Assemblies/"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.MOD_PACKAGE_ID }}-${{ github.ref_name }}
-          path: ${{ env.ASSEMBLY_DIR }}/*.dll
+          path: |
+            1.6/Assemblies/CETweaks.dll
+            1.7/Assemblies/CETweaks.dll
 
   package:
     needs: build
@@ -45,7 +59,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ${{ env.MOD_PACKAGE_ID }}-${{ github.ref_name }}
-          path: ${{ env.ASSEMBLY_DIR }}
 
       - name: create mod archive
         run: |
@@ -55,8 +68,7 @@ jobs:
           for dir in Defs Languages Patches; do
             [ -d "$dir" ] && cp -r "$dir" "$dist"/
           done
-          mkdir -p "$dist/$RIMWORLD_VERSION/Assemblies"
-          cp "$ASSEMBLY_DIR"/*.dll "$dist/$RIMWORLD_VERSION/Assemblies/"
+          cp -r 1.6 1.7 "$dist"/
           cd dist && zip -r "../$MOD_PACKAGE_ID-${{ github.ref_name }}.zip" "$MOD_PACKAGE_ID"
 
       - uses: softprops/action-gh-release@v2

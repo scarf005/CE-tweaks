@@ -1,6 +1,6 @@
 # [scarf] Combat Extended Tweaks
 
-Optional gameplay tweaks for [Combat Extended](https://github.com/CombatExtended-Continued/CombatExtended) on RimWorld 1.6
+Optional gameplay tweaks for [Combat Extended](https://github.com/CombatExtended-Continued/CombatExtended) on RimWorld 1.6 and 1.7
 
 ## Features
 
@@ -33,6 +33,9 @@ Generated autocannon ammunition data: [docs/AutocannonExplosions.md](docs/Autoca
 ## Build
 
 Set `COMBAT_EXTENDED_DIR` if Combat Extended is installed outside the default Steam Workshop location
+
+`Source/` targets RimWorld 1.7 and references the local game from `RIMWORLD_DIR`; the 1.6 assembly is built from the frozen `rimworld-1.6` branch.
+RimWorld 1.7 reference assemblies are not public yet, so the release workflow stops before building.
 
 ```sh
 just test
