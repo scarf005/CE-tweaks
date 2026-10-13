@@ -13,6 +13,8 @@
     <GenerateDependencyFile>false</GenerateDependencyFile>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
