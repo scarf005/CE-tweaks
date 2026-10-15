@@ -6,13 +6,17 @@ mod_directory := "CE-tweaks"
 
 # Run overpressure and generator tests
 test:
-    mise exec dotnet@8.0.422 -- dotnet fsi Tests/PressureModelTests.fsx
+    mise exec dotnet@10.0.301 -- dotnet fsi Tests/PressureModelTests.fsx
     deno test --allow-read scripts
+
+# Benchmark prepared pressure evaluation against the previous per-pawn calculation
+bench:
+    DOTNET_TieredCompilation=0 mise exec dotnet@10.0.301 -- dotnet fsi --optimize+ Benchmarks/PressureModelBenchmarks.fsx
 
 # Format F# and Deno sources with their tracked configuration
 fmt:
-    mise exec dotnet@8.0.422 -- dotnet tool restore
-    mise exec dotnet@8.0.422 -- dotnet tool run fantomas Source/CEOverPressure Tests
+    mise exec dotnet@10.0.301 -- dotnet tool restore
+    mise exec dotnet@10.0.301 -- dotnet tool run fantomas Source/CEOverPressure Tests Benchmarks
     deno fmt
 
 # Build the assembly and regenerate autocannon runtime patches
@@ -22,8 +26,21 @@ generate:
     deno run --allow-read=.,"${COMBAT_EXTENDED_DIR}" --allow-write=. --allow-run=magick scripts/generate.ts "${COMBAT_EXTENDED_DIR}"
     deno fmt Patches/AutocannonExplosions.xml docs/AutocannonExplosions.md
 
-build: generate
-    mise exec dotnet@8.0.422 -- dotnet build Source/CEOverPressure/CEOverPressure.fsproj -c Release
+legacy_ref := env("RIMWORLD_1_6_REF", "rimworld-1.6")
+legacy_dir := "Source/obj/rimworld-1.6"
+
+# Build the RimWorld 1.7 and frozen 1.6 assemblies
+build: generate build-17 build-16
+
+# Build the RimWorld 1.7 assembly
+build-17:
+    mise exec dotnet@10.0.301 -- dotnet build Source/CEOverPressure/CEOverPressure.fsproj -c Release
+
+# Build the RimWorld 1.6 assembly from the frozen 1.6 branch
+build-16:
+    mkdir -p {{legacy_dir}}
+    git archive {{legacy_ref}} Source | tar -x -C {{legacy_dir}}
+    mise exec dotnet@10.0.301 -- dotnet build {{legacy_dir}}/Source/CEOverPressure/CEOverPressure.fsproj -c Release -p:OutputPath="$PWD/1.6/Assemblies/"
 
 # Build and install only the runtime mod tree locally
 install: build
@@ -38,8 +55,9 @@ install: build
     staging="$(mktemp -d)"
     trap 'rm -rf "$staging"' EXIT
     rsync --archive About Defs Languages Patches LoadFolders.xml "$staging/"
-    mkdir -p "$staging/1.6/Assemblies"
+    mkdir -p "$staging/1.6/Assemblies" "$staging/1.7/Assemblies"
     rsync --archive 1.6/Assemblies/CETweaks.dll "$staging/1.6/Assemblies/"
+    rsync --archive 1.7/Assemblies/CETweaks.dll "$staging/1.7/Assemblies/"
     mkdir -p "$destination"
     rsync --archive --delete "$staging/" "$destination/"
     printf 'Installed {{mod_directory}} to %s\n' "$destination"
@@ -53,7 +71,7 @@ enable: install
     from pathlib import Path
 
     if subprocess.run(
-        ["pgrep", "-x", "RimWorldLinux"],
+        ["pgrep", "-x", "RimWorldLinux|RimWorld"],
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

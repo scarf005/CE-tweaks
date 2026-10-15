@@ -6,7 +6,6 @@ open Verse
 
 /// Mod extension for projectile defs. Allows overriding the TNT-equivalent yield,
 /// pressure multiplier, or disabling overpressure for a specific projectile.
-[<AllowNullLiteral>]
 type OverpressureExtension() as this =
     inherit DefModExtension()
 
@@ -24,13 +23,11 @@ type OverpressureExtension() as this =
         this.pressureMultiplier <- 1.0f
 
 /// Marks projectile defs whose CE explosive component is added by this mod.
-[<AllowNullLiteral>]
 type AutocannonExplosionExtension() =
     inherit DefModExtension()
 
 /// Defines a pressure threshold and the maximum number of internal body parts
 /// to damage when peak overpressure exceeds that threshold.
-[<AllowNullLiteral>]
 type InjuryBand() =
     [<Microsoft.FSharp.Core.DefaultValue>]
     val mutable minimumPressureKPa: float32
@@ -40,7 +37,6 @@ type InjuryBand() =
 
 /// Def that configures all overpressure model parameters, damage settings,
 /// room-reflection multipliers, and injury-band thresholds.
-[<AllowNullLiteral>]
 type OverpressureSettingsDef() =
     inherit Def()
 
@@ -150,10 +146,10 @@ type OverpressureSettingsDef() =
     val mutable armorPenetrationReferencePressureKPa: float32
 
     [<Microsoft.FSharp.Core.DefaultValue>]
-    val mutable injuryDamageDef: DamageDef
+    val mutable injuryDamageDef: DamageDef | null
 
     [<Microsoft.FSharp.Core.DefaultValue>]
-    val mutable injuryBands: List<InjuryBand>
+    val mutable injuryBands: List<InjuryBand | null> | null
 
     member internal this.ModelParameters =
         { MetresPerCell = this.metresPerCell

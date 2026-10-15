@@ -9,7 +9,8 @@ open UnityEngine
 open Verse
 open Utils
 
-type BattleLogEntry_OverpressureImpact(initialInitiator: Thing, initialRecipient: Pawn, initialWeapon: ThingDef, damageDef: DamageDef) =
+type BattleLogEntry_OverpressureImpact
+    (initialInitiator: Thing | null, initialRecipient: Pawn | null, initialWeapon: ThingDef | null, damageDef: DamageDef | null) =
     inherit BattleLogEntry_ExplosionImpact(initialInitiator, initialRecipient, initialWeapon, initialWeapon, damageDef)
 
     let mutable initiator = initialInitiator
@@ -19,9 +20,12 @@ type BattleLogEntry_OverpressureImpact(initialInitiator: Thing, initialRecipient
     new() = BattleLogEntry_OverpressureImpact(null, null, null, null)
 
     override this.ToGameStringFromPOV_Worker(pov, forceLog) =
-        if isNull initiator || isNull recipient then base.ToGameStringFromPOV_Worker(pov, forceLog)
-        elif isNull weapon then "CEOP_CombatLogImpact".Translate(initiator.Named("initiator"), recipient.Named("recipient")).Resolve()
-        else "CEOP_CombatLogImpactWithWeapon".Translate(initiator.Named("initiator"), recipient.Named("recipient"), weapon.Named("weapon")).Resolve()
+        match initiator, recipient, weapon with
+        | Null, _, _
+        | _, Null, _ -> base.ToGameStringFromPOV_Worker(pov, forceLog)
+        | NonNull initiator, NonNull recipient, Null -> "CEOP_CombatLogImpact".Translate(initiator.Named("initiator"), recipient.Named("recipient")).Resolve()
+        | NonNull initiator, NonNull recipient, NonNull weapon ->
+            "CEOP_CombatLogImpactWithWeapon".Translate(initiator.Named("initiator"), recipient.Named("recipient"), weapon.Named("weapon")).Resolve()
 
     override this.ExposeData() =
         base.ExposeData()
@@ -36,13 +40,8 @@ type BattleLogEntry_OverpressureImpact(initialInitiator: Thing, initialRecipient
 module internal Overpressure =
     let private settings = lazy DefDatabase<OverpressureSettingsDef>.AllDefsListForReading[0]
 
-    let private extensionFor (projectile: ThingDef) =
-        if isNull projectile then
-            None
-        else
-            match projectile.GetModExtension<OverpressureExtension>() with
-            | null -> None
-            | extension -> Some extension
+    let private extensionFor (projectile: ThingDef | null) =
+        projectile |> Option.ofObj |> Option.bind (_.GetModExtension<OverpressureExtension>() >> Option.ofObj)
 
     /// Estimates TNT-equivalent yield, preferring an explicit extension value
     /// over the damage-and-radius-based model estimate.
@@ -52,33 +51,29 @@ module internal Overpressure =
         | _ -> PressureModel.estimateYieldKg parameters damage radius
 
     let private isThermobaric (damageDef: DamageDef) =
-        damageDef.isExplosive && not (isNull damageDef.workerClass) && typeof<DamageWorker_Flame>.IsAssignableFrom damageDef.workerClass
+        match damageDef.workerClass with
+        | NonNull workerClass -> damageDef.isExplosive && typeof<DamageWorker_Flame>.IsAssignableFrom workerClass
+        | Null -> false
 
     /// Computes the enclosed-room pressure multiplier based on cell count and roof coverage.
     /// More enclosed rooms amplify overpressure through wave reflection.
-    let private roomMultiplier (configuration: OverpressureSettingsDef) (room: Room) =
-        if isNull room || not room.ProperRoom || room.UsesOutdoorTemperature || room.CellCount <= 0 then
-            1.0f
-        else
+    let private roomMultiplier (configuration: OverpressureSettingsDef) (room: Room | null) =
+        match room with
+        | Null -> 1.0f
+        | NonNull room when not room.ProperRoom || room.UsesOutdoorTemperature || room.CellCount <= 0 -> 1.0f
+        | NonNull room ->
             let cellCount = float32 room.CellCount
             let roofFraction = 1.0f - float32 room.OpenRoofCount / cellCount
             let sizeFactor = Mathf.Sqrt(Mathf.Clamp01(configuration.enclosedReferenceRoomCellCount / cellCount))
             1.0f + (configuration.maximumEnclosedReflectionMultiplier - 1.0f) * roofFraction * sizeFactor
 
-    let private modSettings () = LoadedModManager.GetMod<CEOverPressureMod>().GetSettings<CEOverPressureSettings>()
-
-    let private overpressureEnabled () = (modSettings ()).EnableOverpressure
-
-    let private log message =
-        if (modSettings ()).EnableLogging then
-            Log.Message message
-
     let private stunTicks (configuration: OverpressureSettingsDef) peakKPa =
         Mathf.RoundToInt(Mathf.Clamp(peakKPa, configuration.minimumStunTicks, configuration.maximumStunTicks))
 
     let private stun (pawn: Pawn) ticks (instigator: Thing) =
-        if not pawn.Dead && not (isNull pawn.stances) && not (isNull pawn.stances.stunner) then
-            pawn.stances.stunner.StunFor(ticks, instigator)
+        match pawn.stances with
+        | NonNull stances when not pawn.Dead && stances.stunner <> null -> stances.stunner.StunFor(ticks, instigator)
+        | _ -> ()
 
     let private blastWeightMap =
         lazy
@@ -97,33 +92,35 @@ module internal Overpressure =
     let private partsToDamage (configuration: OverpressureSettingsDef) peakKPa partCount =
         let mutable bestThreshold = Single.MinValue
         let mutable result = 0
-        let bands = configuration.injuryBands
-
-        for index = 0 to bands.Count - 1 do
-            let band = bands[index]
-
-            if not (isNull band) && peakKPa >= band.minimumPressureKPa && band.minimumPressureKPa > bestThreshold then
-                bestThreshold <- band.minimumPressureKPa
-                result <- if band.maximumParts < 0 then partCount else min band.maximumParts partCount
+        match configuration.injuryBands with
+        | null -> ()
+        | bands ->
+            for band in bands do
+                match band with
+                | NonNull band when peakKPa >= band.minimumPressureKPa && band.minimumPressureKPa > bestThreshold ->
+                    bestThreshold <- band.minimumPressureKPa
+                    result <- if band.maximumParts < 0 then partCount else min band.maximumParts partCount
+                | _ -> ()
 
         result
 
     let private resolveInitiator (instigator: Thing) =
         match instigator with
-        | :? CombatExtended.ProjectileCE as proj when not (isNull proj.launcher) -> proj.launcher
+        | :? CombatExtended.ProjectileCE as proj when proj.launcher <> null -> proj.launcher
         | _ -> instigator
 
-    let private suppress (configuration: OverpressureSettingsDef) (pawn: Pawn) (origin: IntVec3) (initiator: Thing) ticks =
-        let sourceFaction = if isNull initiator then null else initiator.Faction
-        let suppressable = pawn.TryGetComp<CompSuppressable>()
+    let private suppress (configuration: OverpressureSettingsDef) (pawn: Pawn) (origin: IntVec3) (initiator: Thing | null) ticks =
+        let sourceFaction =
+            match initiator with
+            | null -> null
+            | initiator -> initiator.Faction
 
-        if
-            configuration.suppressionPerStunTick > 0.0f
-            && not (isNull suppressable)
-            && not (obj.ReferenceEquals(pawn.Faction, sourceFaction))
-            && not (suppressable.IgnoreSuppresion(origin))
-        then
+        match pawn.TryGetComp<CompSuppressable>() with
+        | NonNull suppressable when
+            configuration.suppressionPerStunTick > 0.0f && not (obj.ReferenceEquals(pawn.Faction, sourceFaction)) && not (suppressable.IgnoreSuppresion(origin))
+            ->
             suppressable.AddSuppression(float32 ticks * configuration.suppressionPerStunTick, origin)
+        | _ -> ()
 
     let private associateCombatLog
         (battleLogEntry: BattleLogEntry_ExplosionImpact)
@@ -136,7 +133,7 @@ module internal Overpressure =
         if pawn.health.hediffSet.PartIsMissing(part) then
             for hediff in pawn.health.hediffSet.hediffs do
                 match hediff with
-                | :? Hediff_MissingPart as mp when mp.Part = part && isNull mp.combatLogEntry ->
+                | :? Hediff_MissingPart as mp when mp.Part = part && mp.combatLogEntry = null ->
                     mp.combatLogEntry <- WeakReference<LogEntry>(battleLogEntry)
                     mp.combatLogText <- battleLogEntry.ToGameStringFromPOV(null)
                 | _ -> ()
@@ -159,7 +156,7 @@ module internal Overpressure =
             suppress configuration pawn origin initiator ticks
 
             if peakKPa < configuration.injuryThresholdKPa then
-                log (sprintf "[CE-Tweaks] stunned %O at %.1f kPa" pawn peakKPa)
+                Settings.log (fun () -> $"[CE-Tweaks] stunned {pawn} at {peakKPa:F1} kPa")
             else
                 let weightedParts = SimplePool<List<BodyPartRecord>>.Get()
 
@@ -183,16 +180,8 @@ module internal Overpressure =
 
                     let count = partsToDamage configuration peakKPa uniqueCount
 
-                    log (
-                        sprintf
-                            "[CE-Tweaks] injured %O at %.1f kPa, %d/%d parts, %.1f dmg/part, ap=%.2f"
-                            pawn
-                            peakKPa
-                            count
-                            uniqueCount
-                            damagePerPart
-                            armorPenetration
-                    )
+                    Settings.log (fun () ->
+                        $"[CE-Tweaks] injured {pawn} at {peakKPa:F1} kPa, {count}/{uniqueCount} parts, {damagePerPart:F1} dmg/part, ap={armorPenetration:F2}")
 
                     let battleLogEntry = BattleLogEntry_OverpressureImpact(initiator, pawn, projectile, configuration.injuryDamageDef)
 
@@ -218,11 +207,10 @@ module internal Overpressure =
 
     let private applyToPawn
         (configuration: OverpressureSettingsDef)
-        parameters
+        pressureModel
         center
         (map: Map)
         scanRadius
-        yieldKg
         height
         pressureMultiplier
         (blastRoom: Room)
@@ -234,7 +222,7 @@ module internal Overpressure =
         =
         if not pawn.Dead && pawn.Spawned && pawn.Position.InHorDistOf(center, scanRadius) && GenSight.LineOfSight(center, pawn.Position, map, true) then
             let distanceCells = max configuration.minimumDistanceCells (pawn.Position.DistanceTo center)
-            let mutable peakKPa = PressureModel.peakPressureKPa parameters (distanceCells * parameters.MetresPerCell) yieldKg
+            let mutable peakKPa = PressureModel.peakPressureKPa pressureModel (distanceCells * configuration.metresPerCell)
 
             if height < configuration.groundReflectionMaximumHeight then
                 peakKPa <- peakKPa * configuration.groundReflectionMultiplier
@@ -251,16 +239,17 @@ module internal Overpressure =
     /// and applies pressure-based stuns and internal injuries to each affected pawn.
     let apply
         (center: IntVec3)
-        (map: Map)
+        (map: Map | null)
         (radius: float32)
-        (damageDef: DamageDef)
+        (damageDef: DamageDef | null)
         (instigator: Thing)
         (damage: int)
         (armorPenetration: float32)
         (projectile: ThingDef)
         (height: float32)
         =
-        if overpressureEnabled () && not (isNull map) && center.InBounds map && not (isNull damageDef) then
+        match map, damageDef with
+        | NonNull map, NonNull damageDef when (Settings.current ()).EnableOverpressure && center.InBounds map ->
             let configuration = settings.Value
             let extension = extensionFor projectile
 
@@ -278,20 +267,13 @@ module internal Overpressure =
                             | _ -> 1.0f
 
                         let pressureMultiplier = extensionMultiplier * (if isThermobaric damageDef then configuration.thermobaricPressureMultiplier else 1.0f)
-                        let scanRadius = max (radius + configuration.scanRadiusPadding) (PressureModel.pressureRangeCells parameters yieldKg)
+                        let pressureModel = PressureModel.prepare parameters yieldKg
+                        let scanRadius = max (radius + configuration.scanRadiusPadding) (PressureModel.pressureRangeCells pressureModel)
                         let blastRoom = RegionAndRoomQuery.RoomAt(center, map, RegionType.Set_Passable)
                         let enclosedMultiplier = roomMultiplier configuration blastRoom
 
-                        log (
-                            sprintf
-                                "[CE-Tweaks] %O caused %.3fkg TNT blast at %O, pressureMult=%.2f, enclosedMult=%.2f, scanRadius=%.1f"
-                                instigator
-                                yieldKg
-                                center
-                                pressureMultiplier
-                                enclosedMultiplier
-                                scanRadius
-                        )
+                        Settings.log (fun () ->
+                            $"[CE-Tweaks] {instigator} caused {yieldKg:F3}kg TNT blast at {center}, pressureMult={pressureMultiplier:F2}, enclosedMult={enclosedMultiplier:F2}, scanRadius={scanRadius:F1}")
 
                         let maximumRegions = Mathf.CeilToInt(Mathf.PI * scanRadius * scanRadius) + 1
 
@@ -302,7 +284,10 @@ module internal Overpressure =
                                 center,
                                 map,
                                 (fun _ region ->
-                                    (isNull region.door || region.door.Open) && center.InHorDistOf(region.extentsClose.ClosestCellTo center, scanRadius)),
+                                    (match region.door with
+                                     | null -> true
+                                     | door -> door.Open)
+                                    && center.InHorDistOf(region.extentsClose.ClosestCellTo center, scanRadius)),
                                 (fun region ->
                                     let pawns = region.ListerThings.ThingsInGroup(ThingRequestGroup.Pawn)
 
@@ -318,11 +303,10 @@ module internal Overpressure =
                             for pawn in processedPawns do
                                 applyToPawn
                                     configuration
-                                    parameters
+                                    pressureModel
                                     center
                                     map
                                     scanRadius
-                                    yieldKg
                                     height
                                     pressureMultiplier
                                     blastRoom
@@ -334,6 +318,7 @@ module internal Overpressure =
                         finally
                             processedPawns.Clear()
                             SimplePool<HashSet<Pawn>>.Return processedPawns
+        | _ -> ()
 
 [<HarmonyPatch(typeof<Explosion>, "ExplosionEnded")>]
 module internal ExplosionPatch =
@@ -355,10 +340,10 @@ module internal ExplosionPatch =
 [<HarmonyPatch(typeof<CompExplosiveCE>, "Explode")>]
 module internal AutocannonExplosionPatch =
     let Prefix (__instance: CompExplosiveCE) =
-        let parent = __instance.parent
-        let settings = LoadedModManager.GetMod<CEOverPressureMod>().GetSettings<CEOverPressureSettings>()
-
-        settings.EnableAutocannonExplosions || isNull parent || isNull parent.def || isNull (parent.def.GetModExtension<AutocannonExplosionExtension>())
+        (Settings.current ()).EnableAutocannonExplosions
+        || match __instance.parent with
+           | NonNull parent when parent.def <> null -> not (parent.def.HasModExtension<AutocannonExplosionExtension>())
+           | _ -> true
 
 [<StaticConstructorOnStartup>]
 type CEOverPressureBootstrap() =

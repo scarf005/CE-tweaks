@@ -9,6 +9,8 @@ type CEOverPressureSettings() =
 
     let mutable enableOverpressure = false
     let mutable enableAutocannonExplosions = false
+    let mutable enableBlastPropagation = true
+    let mutable enableIdleWeaponReloading = true
     let mutable enableLogging = false
 
     member this.EnableOverpressure
@@ -19,6 +21,14 @@ type CEOverPressureSettings() =
         with get () = enableAutocannonExplosions
         and set v = enableAutocannonExplosions <- v
 
+    member this.EnableBlastPropagation
+        with get () = enableBlastPropagation
+        and set v = enableBlastPropagation <- v
+
+    member this.EnableIdleWeaponReloading
+        with get () = enableIdleWeaponReloading
+        and set v = enableIdleWeaponReloading <- v
+
     member this.EnableLogging
         with get () = enableLogging
         and set v = enableLogging <- v
@@ -26,6 +36,8 @@ type CEOverPressureSettings() =
     override this.ExposeData() =
         Scribe_Values.Look<bool>(&enableOverpressure, "enableOverpressure", false, false)
         Scribe_Values.Look<bool>(&enableAutocannonExplosions, "enableAutocannonExplosions", false, false)
+        Scribe_Values.Look<bool>(&enableBlastPropagation, "enableBlastPropagation", true, false)
+        Scribe_Values.Look<bool>(&enableIdleWeaponReloading, "enableIdleWeaponReloading", true, false)
         Scribe_Values.Look<bool>(&enableLogging, "enableLogging", false, false)
 
 
@@ -41,28 +53,31 @@ type CEOverPressureMod(contents: ModContentPack) as this =
         listing.Begin(canvas)
 
         let settings = this.GetSettings<CEOverPressureSettings>()
-        let mutable overpressure = settings.EnableOverpressure
-        let mutable autocannonExplosions = settings.EnableAutocannonExplosions
-        let mutable logging = settings.EnableLogging
+        let changed = ref false
 
-        listing.CheckboxLabeled(
-            "CE_Tweaks_EnableOverpressure_Label".Translate().ToString(),
-            &overpressure,
-            "CE_Tweaks_EnableOverpressure_Tooltip".Translate().ToString()
-        )
+        let toggle key (current: bool) (update: bool -> unit) =
+            let mutable value = current
+            listing.CheckboxLabeled($"CE_Tweaks_{key}_Label".Translate().ToString(), &value, $"CE_Tweaks_{key}_Tooltip".Translate().ToString())
 
-        listing.CheckboxLabeled(
-            "CE_Tweaks_EnableAutocannonExplosions_Label".Translate().ToString(),
-            &autocannonExplosions,
-            "CE_Tweaks_EnableAutocannonExplosions_Tooltip".Translate().ToString()
-        )
+            if value <> current then
+                update value
+                changed.Value <- true
 
-        listing.CheckboxLabeled("CE_Tweaks_EnableLogging_Label".Translate().ToString(), &logging, "CE_Tweaks_EnableLogging_Tooltip".Translate().ToString())
+        toggle "EnableOverpressure" settings.EnableOverpressure (fun value -> settings.EnableOverpressure <- value)
+        toggle "EnableAutocannonExplosions" settings.EnableAutocannonExplosions (fun value -> settings.EnableAutocannonExplosions <- value)
+        toggle "EnableBlastPropagation" settings.EnableBlastPropagation (fun value -> settings.EnableBlastPropagation <- value)
+        toggle "EnableIdleWeaponReloading" settings.EnableIdleWeaponReloading (fun value -> settings.EnableIdleWeaponReloading <- value)
+        toggle "EnableLogging" settings.EnableLogging (fun value -> settings.EnableLogging <- value)
 
-        if overpressure <> settings.EnableOverpressure || autocannonExplosions <> settings.EnableAutocannonExplosions || logging <> settings.EnableLogging then
-            settings.EnableOverpressure <- overpressure
-            settings.EnableAutocannonExplosions <- autocannonExplosions
-            settings.EnableLogging <- logging
+        if changed.Value then
             settings.Write()
 
         listing.End()
+
+module internal Settings =
+    let current () = LoadedModManager.GetMod<CEOverPressureMod>().GetSettings<CEOverPressureSettings>()
+
+    /// Logs only when enabled, so disabled logging never formats the message.
+    let inline log ([<InlineIfLambda>] message: unit -> string) =
+        if (current ()).EnableLogging then
+            Log.Message(message ())

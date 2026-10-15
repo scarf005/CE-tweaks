@@ -26,9 +26,39 @@ type internal PressureModelParameters =
       FarOffset: float32
       PressureUnitKPa: float32 }
 
+type internal PreparedPressureModel =
+    private
+        { PressureRangeCells: float32
+          PressureCubeRootYield: float32
+          MinimumScaledDistance: float32
+          CloseRangeLimit: float32
+          CloseCubicCoefficient: float32
+          CloseOffset: float32
+          FarLinearCoefficient: float32
+          FarQuadraticCoefficient: float32
+          FarCubicCoefficient: float32
+          FarOffset: float32
+          PressureUnitKPa: float32 }
+
 module internal PressureModel =
     let private power value exponent = Math.Pow(float value, float exponent) |> float32
     let private cubeRoot value = power value (1.0f / 3.0f)
+
+    let prepare parameters tntEquivalentKg =
+        let rangeCubeRootYield = cubeRoot tntEquivalentKg
+
+        { PressureRangeCells = parameters.RangeCoefficientMetres * rangeCubeRootYield / parameters.MetresPerCell
+          PressureCubeRootYield =
+            if tntEquivalentKg >= parameters.MinimumPressureYieldKg then rangeCubeRootYield else cubeRoot parameters.MinimumPressureYieldKg
+          MinimumScaledDistance = parameters.MinimumScaledDistance
+          CloseRangeLimit = parameters.CloseRangeLimit
+          CloseCubicCoefficient = parameters.CloseCubicCoefficient
+          CloseOffset = parameters.CloseOffset
+          FarLinearCoefficient = parameters.FarLinearCoefficient
+          FarQuadraticCoefficient = parameters.FarQuadraticCoefficient
+          FarCubicCoefficient = parameters.FarCubicCoefficient
+          FarOffset = parameters.FarOffset
+          PressureUnitKPa = parameters.PressureUnitKPa }
 
     /// Estimates the TNT-equivalent yield (kg) from the observed damage and blast radius.
     /// Uses a weighted geometric mean of damage-derived and radius-derived yields,
@@ -44,24 +74,20 @@ module internal PressureModel =
 
             power damageYield damageWeight * power radiusYield (1.0f - damageWeight) |> max parameters.MinimumYieldKg |> min parameters.MaximumYieldKg
 
-    let pressureRangeCells parameters yieldKg = parameters.RangeCoefficientMetres * cubeRoot yieldKg / parameters.MetresPerCell
+    let pressureRangeCells prepared = prepared.PressureRangeCells
 
     /// Computes peak overpressure (kPa) at a given distance from an explosion
-    /// using a piecewise cubic Friedlander approximation.
+    /// using blast values prepared once for all affected pawns.
     /// See https://en.wikipedia.org/wiki/Friedlander_equation
-    let peakPressureKPa parameters distanceMetres tntEquivalentKg =
-        let cubeRootYield = cubeRoot (max tntEquivalentKg parameters.MinimumPressureYieldKg)
-        let scaledDistance = max parameters.MinimumScaledDistance (distanceMetres / cubeRootYield)
+    let peakPressureKPa prepared distanceMetres =
+        let scaledDistance = max prepared.MinimumScaledDistance (distanceMetres / prepared.PressureCubeRootYield)
         let z2 = scaledDistance * scaledDistance
         let z3 = z2 * scaledDistance
 
         let pressure =
-            if scaledDistance < parameters.CloseRangeLimit then
-                parameters.CloseCubicCoefficient / z3 + parameters.CloseOffset
+            if scaledDistance < prepared.CloseRangeLimit then
+                prepared.CloseCubicCoefficient / z3 + prepared.CloseOffset
             else
-                parameters.FarLinearCoefficient / scaledDistance
-                + parameters.FarQuadraticCoefficient / z2
-                + parameters.FarCubicCoefficient / z3
-                + parameters.FarOffset
+                prepared.FarLinearCoefficient / scaledDistance + prepared.FarQuadraticCoefficient / z2 + prepared.FarCubicCoefficient / z3 + prepared.FarOffset
 
-        max 0.0f (pressure * parameters.PressureUnitKPa)
+        max 0.0f (pressure * prepared.PressureUnitKPa)
